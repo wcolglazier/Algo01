@@ -19,8 +19,6 @@ sp500_df = sp500_df.reindex(df.index, method='nearest')
 # EMA configuration
 ema_short_length = 20
 ema_long_length = 45
-ema_90_length = 90
-ema_140_length = 140
 
 # Trade configuration
 threshold = 0.07
@@ -34,8 +32,6 @@ current_capital = initial_capital
 # Calculate EMAs
 df['EMA_Short'] = df['Close'].ewm(span=ema_short_length, adjust=False).mean()
 df['EMA_Long'] = df['Close'].ewm(span=ema_long_length, adjust=False).mean()
-df['EMA_90'] = df['Close'].ewm(span=ema_90_length, adjust=False).mean()
-df['EMA_140'] = df['Close'].ewm(span=ema_140_length, adjust=False).mean()
 
 # Trade tracking list
 trades = []
@@ -99,10 +95,6 @@ def check_trade_conditions(trade, row):
 
 # Iterate through the dataframe to check for trade conditions
 for index, row in df.iterrows():
-    # Ensure no trades if EMA 140 is above EMA 90
-    if row['EMA_140'] > row['EMA_90']:
-        continue  # Skip to the next iteration if the condition is met
-
     # Check for new trade opportunities
     timestamp_30_min_earlier = row.name - pd.Timedelta(minutes=30)
     if timestamp_30_min_earlier in df.index:
@@ -140,10 +132,6 @@ for index, row in df.iterrows():
     # Track portfolio value over time
     portfolio_values.append(current_capital)
 
-# Pad portfolio_values to match df.index length
-if len(portfolio_values) < len(df.index):
-    portfolio_values.extend([current_capital] * (len(df.index) - len(portfolio_values)))
-
 # Calculate average trade duration
 average_trade_duration = np.mean(trade_durations) if trade_durations else 0
 
@@ -161,6 +149,9 @@ high_percent_in_trade = np.max(percent_in_trade) if percent_in_trade else 0
 average_total_percent_in_trade = np.mean(total_percent_in_trade) if total_percent_in_trade else 0
 low_total_percent_in_trade = np.min(total_percent_in_trade) if total_percent_in_trade else 0
 high_total_percent_in_trade = np.max(total_percent_in_trade) if total_percent_in_trade else 0
+
+# Calculate buy and hold strategy for gold
+buy_and_hold_value = df['Close'] / df['Close'].iloc[0] * initial_capital
 
 # Print summary results
 print("\nSummary Results:")
@@ -205,8 +196,6 @@ plt.figure(figsize=(14, 7))
 plt.plot(df['Close'], label='Close Price', alpha=0.5)
 plt.plot(df['EMA_Short'], label=f'EMA {ema_short_length}', alpha=0.75)
 plt.plot(df['EMA_Long'], label=f'EMA {ema_long_length}', alpha=0.75)
-plt.plot(df['EMA_90'], label=f'EMA {ema_90_length}', alpha=0.75)
-plt.plot(df['EMA_140'], label=f'EMA {ema_140_length}', alpha=0.75)
 
 # Mark trades on the plot
 for trade in trades:
@@ -223,16 +212,17 @@ plt.grid()
 plt.savefig('trading_strategy_chart.png')
 plt.close()
 
-# Plot portfolio value and S&P 500 value
+# Plot portfolio value, buy-and-hold strategy, and S&P 500 value
 plt.figure(figsize=(14, 7))
 plt.plot(df.index, portfolio_values, label='Portfolio Value', alpha=0.75)
+plt.plot(df.index, buy_and_hold_value, label='Buy & Hold Gold Value', alpha=0.75, linestyle='--')
 plt.plot(sp500_df.index, sp500_df['Close'] / sp500_df['Close'].iloc[0] * initial_capital, label='S&P 500 Value', alpha=0.75)
-plt.title('Portfolio Value vs. S&P 500')
+plt.title('Portfolio Value vs. Buy & Hold Gold and S&P 500')
 plt.xlabel('Time')
 plt.ylabel('Value')
 plt.legend()
 plt.grid()
-plt.savefig('portfolio_vs_sp500.png')
+plt.savefig('portfolio_vs_sp500_buy_hold.png')
 plt.close()
 
 # Get the current date and time
@@ -291,7 +281,7 @@ pdf.image('trading_strategy_chart.png', x=10, y=8, w=190)
 
 # Add portfolio value vs S&P 500 chart
 pdf.add_page()
-pdf.image('portfolio_vs_sp500.png', x=10, y=8, w=190)
+pdf.image('portfolio_vs_sp500_buy_hold.png', x=10, y=8, w=190)
 
 # Add trades
 pdf.add_page()
@@ -318,6 +308,5 @@ for i in range(len(trades_df)):
         row_data += f" {row['exit_time']} {row['exit_price']} {row['amount']}"
     pdf.cell(200, 10, txt=row_data, ln=True)
 
-# Save the PDF with timestamp in the name
-pdf_name = f"trading_strategy_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-pdf.output(pdf_name)
+# Save the PDF
+pdf.output("trading_strategy_report.pdf")
